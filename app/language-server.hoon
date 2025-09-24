@@ -5,7 +5,9 @@
     easy-print=language-server-easy-print,
     rs=language-server-rune-snippet,
     build=language-server-build,
-    default-agent, verb
+    default-agent, verb, sr=language-server-sortug,
+    async=language-server-async,
+    deep=language-server-deep
 !:
 =/  debug  |
 |%
@@ -33,6 +35,16 @@
 +$  position
   [row=@ud col=@ud]
 ::
++$  state-two
+  $:  %2
+      bufs=(map uri=@t buf=wall)
+      builds=(map uri=@t =vase)
+      ford-diagnostics=(map uri=@t (list diagnostic:lsp-sur))
+      preludes=(map uri=@t type)
+      pending=(list card)
+      stdlib=[hoon=wall zuse=wall lull=wall arvo=wall]
+  ==
+
 +$  state-one
   $:  %1
       bufs=(map uri=@t buf=wall)
@@ -53,14 +65,16 @@
   $%
     state-zero
     state-one
+    state-two
   ==
 ++  jack
   |=  v=versioned-state
   =*  old  +.v
   ?-  -.v
-    %0  *state-one
+    %0  *state-two
     ::
-    %1  v(pending ~)
+    %1  *state-two
+    %2  v(pending ~)
   ==
 ::
 +$  adapted-state  $&(versioned-state jack)
@@ -81,11 +95,13 @@
     ^+  on-init:*agent:gall
     ^-  (quip card _this)
     ~&  >  %lsp-init
-    :_  this  :_  ~
+    :_  this  :-
     :*  %pass  /connect
         %arvo  %e
         %connect  [~ /'~language-server-protocol']  %language-server
     ==
+    ~
+    :: init-stdlib:lsp
   ::
   ++  on-save   !>(state)
   ++  on-load
@@ -97,7 +113,8 @@
     =-  [~ this(state -)]
     ?-    -.old
         %0  ;;(adapted-state !<(versioned-state vase))
-        %1  old
+        %1  ;;(adapted-state !<(versioned-state vase))
+        %2  old
     ==
   ::
   ++  on-poke
@@ -105,9 +122,10 @@
     |=  [=mark =vase]
     ^-  (quip card _this)
     =^  cards  state
+    ~&  on-poke=mark
       ?+    mark  (on-poke:def mark vase)
-          %language-server-rpc-notification
-        (on-notification:lsp !<(all:notification:lsp-sur vase))
+        ::   %language-server-rpc-notification
+        :: (on-notification:lsp !<(all:notification:lsp-sur vase))
           %language-server-rpc-request
         (on-request:lsp !<(all:request:lsp-sur vase))
       ==
@@ -132,6 +150,16 @@
         [%eyre %bound *]  `state
         [%clay *]  (handle-build:lsp wire +.sign-arvo)
         [%behn *]  ~?  >  debug  [%behn pending:state]  [pending:state state(pending done)]
+        [%khan %arow *]  ~&  khan=-.p.sign-arvo
+          ?:  ?=(%.n -.p.sign-arvo)
+            ((slog leaf+<p.p.sign-arvo> ~) `state)
+          :: =/  v  !<(vase q.p.p.sign-arvo)
+          =/  =type  -.q.p.p.sign-arvo
+          :: =/  lol  ?@  type  ~&  atom=type  ~  ~&  >  cell=-.type  ~
+          =/  spt  (find-spot:sr -.wire type)
+          ?~  spt  `state
+          (serve-definition wire u.spt)
+          
       ==
     [cards this]
   ::
@@ -163,10 +191,13 @@
   |=  req=all:request:lsp-sur
   ^-  (quip card _state)
   =^  cards  state
+  :: TODO just send the json here, marks are gay
+  ~&  >>  req=-.req
     ?+  -.req  [~ state]
       %text-document--hover       ~?  >  debug  %loading  (handle-loading req)
       %text-document--hover-complete  ~?  >  debug  [%hover req]  (handle-hover req)
       %text-document--completion  (handle-completion req)
+      %text-document--definition  (handle-definition req)
     ==
   [cards state]
 ::
@@ -209,6 +240,32 @@
     ==
   [name 1 doc '' name 1]
 ::
+:: 
+++  handle-definition
+  |=  com=text-document--definition:request:lsp-sur
+  ^-  (quip card _state)
+  =/  pat  (uri-to-path:build uri.com)
+  =/  longpath  (parse-uri:build uri.com)
+  =/  longpat  [id.com +.longpath]
+  ~&  com=[com pat]
+  =/  ted  (~(build-file async bow) [pat longpat])
+  :_  state
+  :~  ted  ==
+++  serve-definition
+  |=  [=wire =spot]
+  ^-  (quip card _state)
+  :: TODO NO FUCKING DESK ON THE +spot
+  :: stuff in scope can only possibly be in the same desk or in %base
+  ~&  spot=[wire spot]
+  =/  id  -.wire
+  =/  wires  (split-paths:build +.wire)
+  =/  nwire  (weld -.wires p.spot)
+  =/  uri  (cat 3 ['file:///' (spat nwire)])
+  :_  state
+  %^  give-rpc-response  %text-document--definition  id  
+  [%location ~[[uri q.spot]]]
+::
+:: 
 ++  give-rpc-response
   |=  res=all:response:lsp-sur
   ^-  (list card)
@@ -224,7 +281,7 @@
 ++  handle-exit
   ^-  (quip card _state)
   ~&  >  %lsp-shutdown
-  :_  *state-one
+  :_  *state-two
   %+  turn
     ~(tap in ~(key by builds))
   |=  uri=@t
@@ -259,26 +316,48 @@
 ++  handle-did-change
   |=  [document=versioned-doc-id:lsp-sur changes=(list change:lsp-sur)]
   ^-  (quip card _state)
+  ~&  changes=changes
   =/  updated=wall
     (sync-buf (~(got by bufs) uri.document) changes)
+    ~&  updated-len=(lent updated)
   =.  bufs
     (~(put by bufs) uri.document updated)
   `state
 ::
 ++  handle-build
-  |=  [=path =gift:clay]
+  |=  [path=(pole knot) =gift:clay]
   ^-  (quip card _state)
   ?>  ?=([%writ *] gift)
+  ?+  path  `state
+    [%ford %stdlib file=@t ~]  (handle-build-stdlib file.path p.gift)
+    [%ford uri=@t ~]  (handle-build-old path p.gift)
+  ==
+++  handle-build-stdlib
+  |=  [file=@t =riot:clay]
+  =/  =path  /base/sys/[file]/hoon
+  ?~  riot  `state
+  :: =/  txt  .^(@t %cx /(scot %p our.bow)/base/(scot %da now.bow)/sys/[file]/hoon))
+  :: =/  txt  !<(@t +.r.u.riot)
+  :: =/  file=wall  (to-wall (trip txt))
+  :: =.  stdlib
+  ::   ?:  .=('arvo' file)  stdlib(arvo file)
+  ::   ?:  .=('hoon' file)  stdlib(hoon file)
+  ::   ?:  .=('zuse' file)  stdlib(zuse file)
+  ::   ?:  .=('lull' file)  stdlib(lull file)
+  ::     stdlib
+  `state
+++  handle-build-old
+  |=  [=path =riot:clay]
   =/  uri=@t
     (snag 1 path)
   ~?  >  debug  handle-did-build+uri
   =/  loc=^path  (uri-to-path:build uri)
   =;  [res=(quip card _state) dek=desk]
     [(snoc -.res (build-file | uri loc `dek)) +.res]
-  ?~  p.gift
+  ?~  riot
     [[~ state] %base]
   =.  builds
-    (~(put by builds) uri q.r.u.p.gift)
+    (~(put by builds) uri q.r.u.riot)
   =.  ford-diagnostics
     (~(del by ford-diagnostics) uri)
   =/  bek  byk.bow(r da+now.bow)
@@ -289,7 +368,9 @@
   =.  dek  ?:  =(%kids i.desks)  %base  i.desks
   =/  exists=?  .^(? %cu (en-beam bek(q dek) loc))
   ?.  exists  $(desks t.desks)
-  =+  .^(=open:clay %cs /(scot %p our.bow)/[dek]/(scot %da now.bow)/open/foo)
+  =/  scrypat  /(scot %p our.bow)/[dek]/(scot %da now.bow)/open/foo
+  ~&  >>  openpath=[dek=dek loc=loc scrypat]
+  =+  .^(=open:clay %cs scrypat)
   =/  =type  -:(open loc)
   ~&  >>  "built {<path>} at {<dek>}"
   =/  file=wall
@@ -311,6 +392,7 @@
 ::
 ++  build-file
   |=  [eager=? uri=@t =path desk=(unit desk)]
+  ~&  >>  build-file=[eager uri path desk]
   ^-  card
   =/  =rave:clay
     ?:  eager
@@ -344,6 +426,7 @@
   ~?  >  debug  handle-did-open+uri.item
   =/  =path
     (uri-to-path:build uri.item)
+  ~&  handle-did-open=[path uri.item]
   =/  bek  byk.bow
   =/  desks=(list desk)  ~(tap in .^((set desk) %cd (en-beam bek /)))
   =|  dek=desk
@@ -354,10 +437,10 @@
   ?.  exists  $(desks t.desks)
   ?~  path  `state
   ~?  >  debug  path
-  ?:  ?=([%lib %language-server @ @ ~] path)
-    `state
-  ?:  ?=(%sys -.path)
-    `state
+  :: ?:  ?=([%lib %language-server @ @ ~] path)
+  ::   `state
+  :: ?:  ?=(%sys -.path)
+  ::   `state
   ~?  >  debug  "%source-desk for {<path>}: {<dek>}"
   =/  buf=wall
     (to-wall (trip text.item))
@@ -418,6 +501,54 @@
   |=  cop=text-document--hover-complete:request:lsp-sur
   ^-  (quip card _state)
   =/  hov  hov.cop
+  ~&  >  handle-hover=uri.hov
+  =|  item=text-document-item:lsp-sur
+  ?.  (~(has by bufs) uri.hov)  (handle-did-open item(uri uri.hov))
+  :: :_  state
+  :: %^  give-rpc-response  %text-document--hover  id.hov
+  :: 
+  =/  test  (rust "lol" bar)
+  =/  buf=wall
+    ~|  "{<uri.hov>} not found"  (~(got by bufs) uri.hov)
+  ?~  buf  ~&  "no buffer data, reloading"
+    (handle-did-open item(uri uri.hov))
+  =/  txt
+    (zing (join "\0a" buf))
+  ~&  >  txt-len=(lent txt)
+  =/  pos  (get-pos buf row.hov col.hov)
+  =/  magicked  txt:(insert-magic:auto pos txt)
+  =/  pax  (uri-to-path:build uri.hov)
+  =/  scrypat  /(scot %p our.bow)/argo/(scot %da now.bow)/open/foo
+  ~&  >>  openpath=[`path`scrypat pax=pax]
+  =+  .^(=open:clay %cs scrypat)
+  :: =/  sut  (~(gut by preludes) uri.hov -:!>(..zuse))
+  :: =/  sut  -:!>(..zuse)
+
+  =/  sut=type  -:(open pax)
+  :: =/  an1  (analyze-type:sr sut)
+  :: =/  an2  ~&  "zuse-sut"  (analyze-type:sr -:!>(..zuse))
+  :: =/  an3  ~&  "arvo-sut"  (analyze-type:sr -:!>(..arvo))
+  :: =/  an4  ~&  "hoon-sut"  (analyze-type:sr -:!>(..hoon))
+  :: =/  an5  ~&  "lull-sut"  (analyze-type:sr -:!>(..lull))
+  :: =/  advanced  (advance-tape:auto sut pos txt)
+  :: ~&  >  adv=advanced
+  :: =/  pile  (tape-to-pile:auto pax txt)
+  =/  pile  (tape-to-pile:auto pax magicked)
+  ~&  pile=[sur.pile lib.pile]
+  =/  typmul=(unit [term type spot])  (find-type-mule:auto sut hoon.pile)
+  ?~  typmul  ~&  "no-typmul  "  `state
+  ~&  >>  spot=[-.u.typmul +>.u.typmul]
+  
+  =/  snippet  (print-hover:sr u.typmul)
+  =/  docs  (crip (to-tape snippet))
+  :: ~&  >  snip=docs
+  :: =/  types  (exact-list-tape:auto sut pos magicked)
+  :: ~&  >  exact=types
+  :_  state  %^  give-rpc-response  %text-document--hover  id.hov  `docs
+++  handle-hover-old
+  |=  cop=text-document--hover-complete:request:lsp-sur
+  ^-  (quip card _state)
+  =/  hov  hov.cop
   =|  item=text-document-item:lsp-sur
   ?.  (~(has by bufs) uri.hov)  (handle-did-open item(uri uri.hov))
   :_  state
@@ -431,7 +562,7 @@
   =/  hon  (tape-to-hoon:auto sut pos txt)
   =/  docs=(unit @t)
     %+  biff  (find-type-mule:auto sut hon)
-    |=  [id=term typ=type]
+    |=  [id=term typ=type spt=spot]
     ~?  >  debug  "looking for type: {<id>}"
     =+  to-display=(mule |.((find-item-in-type:dprint ~[id] typ)))
     :-  ~
@@ -467,10 +598,13 @@
 ::
 ++  sync-buf
   |=  [buf=wall changes=(list change:lsp-sur)]
+  
   |-  ^-  wall
   ?~  changes
     buf
-  ?:  ?|(?=(~ range.i.changes) ?=(~ range-length.i.changes))
+  :: CHANGE it almost always has null range-length this is a terrible idea
+  ?~  range.i.changes
+  :: ?:  ?|(?=(~ range.i.changes) ?=(~ range-length.i.changes))
     =/  =wain  (to-wain:format text.i.changes)
     =.  buf  (turn wain trip)
     $(changes t.changes)
@@ -576,7 +710,17 @@
   =-  [%pass /lsp/write %arvo %c %info -]~
   =/  fath=^path  (weld /(scot %p our.bow)/[desk]/(scot %da now.bow) path)
   (foal:space:userlib fath data)
-::
+::  **** ~polwex MY EDITS ****
+:: ::
+++  init-stdlib
+  :: one clay poke per file
+  :~
+  [%pass /ford/stdlib/arvo %arvo %c %warp our.bow %base `[%sing %a da+now.bow /sys/arvo/hoon]]
+  [%pass /ford/stdlib/hoon %arvo %c %warp our.bow %base `[%sing %a da+now.bow /sys/hoon/hoon]]
+  [%pass /ford/stdlib/zuse %arvo %c %warp our.bow %base `[%sing %a da+now.bow /sys/zuse/hoon]]
+  [%pass /ford/stdlib/lull %arvo %c %warp our.bow %base `[%sing %a da+now.bow /sys/lull/hoon]]
+  ==
+:: ::
 ::    +hite
 ::
 ::  write text as hoon to desk.
@@ -587,3 +731,4 @@
       =-  (cite desk path -)
       [mark [type ?:(=(%hoon mark) txt (need (de:json:html txt)))]]
 --
+

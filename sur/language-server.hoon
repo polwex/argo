@@ -10,6 +10,7 @@
       text-document--hover
       text-document--hover-complete
       text-document--completion
+      text-document--definition
       unknown
     ==
   +$  text-document--hover
@@ -18,6 +19,8 @@
     [%text-document--hover-complete hov=text-document--hover]
   +$  text-document--completion
     [%text-document--completion id=cord position versioned-doc-id]
+  +$  text-document--definition
+    [%text-document--definition id=cord position versioned-doc-id]
   +$  unknown
     [%unknown json]
   --
@@ -27,11 +30,14 @@
     $%
       text-document--hover
       text-document--completion
+      text-document--definition
     ==
   +$  text-document--hover
     [%text-document--hover id=cord contents=(unit @t)]
   +$  text-document--completion
     [%text-document--completion id=cord completion=(list completion-item)]
+  +$  text-document--definition
+    [%text-document--definition id=cord =location]
   --
 ::
 +$  completion-item
@@ -44,6 +50,12 @@
     insert-text-format=@ud
   ==
 ::
++$  location
+  $%  [%location p=(list [uri=@t =range])]
+      [%link p=(list [target-uri=@t target-range=range target-selection-range=range origin-selection-range=(unit range)])]
+      [%empty ~]
+  ==
+:: 
 +$  diagnostic
   [=range severity=@ud message=@t]
 ::

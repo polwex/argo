@@ -48,6 +48,19 @@
     `^path`path
   $(path t.path)
 ::
+++  split-paths
+  |=  right=path
+  ^-  [path path]
+  =/  pier-root=(set cord)
+    %-  sy
+    ['app' 'gen' 'lib' 'mar' 'ren' 'sur' 'sys' 'test' ~]
+  =|  left=path
+  |-
+  ?<  ?=(~ right)
+  ?:  (~(has in pier-root) i.right)
+    [left (flop right)]
+  $(right t.right, left [i.right left])
+::
 ++  parse-uri
   |=  uri=@t
   =-  (fall - /fail)

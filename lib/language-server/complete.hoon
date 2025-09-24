@@ -1,4 +1,4 @@
-/+  language-server-parser, pprint
+/+  language-server-parser, lsr=language-server-sortug, pprint
 ::  Autocomplete for hoon.
 ::
 =/  debug  |
@@ -144,7 +144,7 @@
 
 ++  find-type-mule
   |=  [sut=type gen=hoon]
-  ^-  (unit [term type])
+  ^-  (unit [term type spot])
   =/  res  (mule |.((find-type sut gen)))
   ?-  -.res
     %&  p.res
@@ -161,7 +161,7 @@
   =/  res  (mule |.((find-type sut gen)))
   ?-  -.res
     %&  %+  bind  p.res
-      |=([id=term typ=type] [id [typ ~]])
+      |=([id=term typ=type spt=spot] [id [typ ~]])
     %|
      =,  format
      =-  `[%error [*type `"{(of-wall -)}"]]
@@ -173,13 +173,14 @@
 ::  Get the subject type of the wing where you've put the "magic-spoon".
 ::
 ++  find-type
+  =|  =spot
   |=  [sut=type gen=hoon]
   =*  loop  $
   |^
-  ^-  (unit [term type])
+  ^-  (unit [term type ^spot])
   ?-    gen
-      [%cnts [%magic-spoon ~] *]    `['' sut]
-      [%cnts [%magic-spoon @ ~] *]  ~?  >  debug  ms+gen  `[i.t.p.gen sut]
+      [%cnts [%magic-spoon ~] *]    `['' sut spot]
+      [%cnts [%magic-spoon @ ~] *]  ~?  >  debug  ms+gen  `[i.t.p.gen sut spot]
       [%cnts [%magic-spoon @ *] *]
     %=  $
       sut      (~(play ut sut) wing+t.t.p.gen)
@@ -187,7 +188,7 @@
     ==
   ::
       [%cnts [%magic-fork @ ~] *]
-    `['' (~(play ut sut) wing+t.p.gen)]
+    `['' (~(play ut sut) wing+t.p.gen) spot]
   ::
       [^ *]      (both p.gen q.gen)
       [%brcn *]  (grow q.gen)
@@ -195,7 +196,7 @@
       [%cnts *]
     ?^  a=(find [%magic-spoon ~] p.gen)
       $(p.gen (slag u.a p.gen))
-    |-  ^-  (unit [term type])
+    |-  ^-  (unit [term type ^spot])
     =*  inner-loop  $
     ?~  q.gen
       ~
@@ -229,7 +230,8 @@
       [%wtcl *]  (bell p.gen q.gen r.gen)
       [%fits *]  (both p.gen wing+q.gen)
       [%wthx *]  loop(gen wing+q.gen)
-      [%dbug *]  loop(gen q.gen)
+      [%dbug *]
+        loop(gen q.gen, spot p.gen)
       [%zpcm *]  (both p.gen q.gen)
       [%lost *]  loop(gen p.gen)
       [%zpmc *]  (both p.gen q.gen)
@@ -247,8 +249,8 @@
   ==
   ::
   ++  replace
-    |=  [a=(unit [term type]) b=(trap (unit [term type]))]
-    ^-  (unit [term type])
+    |=  [a=(unit [term type ^spot]) b=(trap (unit [term type ^spot]))]
+    ^-  (unit [term type ^spot])
     ?~(a $:b a)
   ::
   ++  both
@@ -292,12 +294,12 @@
   ++  grow
     |=  m=(map term tome)
     =/  tomes  ~(tap by m)
-    |-  ^-  (unit [term type])
+    |-  ^-  (unit [term type ^spot])
     =*  outer-loop  $
     ?~  tomes
       ~
     =/  arms  ~(tap by q.q.i.tomes)
-    |-  ^-  (unit [term type])
+    |-  ^-  (unit [term type ^spot])
     =*  inner-loop  $
     ?~  arms
       outer-loop(tomes t.tomes)
@@ -313,7 +315,7 @@
 ::
 ++  find-type-in-spec
   |=  [sut=type pec=spec]
-  ^-  (unit [term type])
+  ^-  (unit [term type spot])
   ~?  >  debug  find-type-in-spec+(render-type:pprint sut)
   ~?  >  debug  find-type-in-spec+pec
   ~
@@ -401,7 +403,7 @@
 ++  advance-hoon
   |=  [sut=type gen=hoon]
   %+  bind  (find-type-mule sut gen)
-  |=  [id=term typ=type]
+  |=  [id=term typ=type spt=spot]
   =/  matches=(list (option type))
     (search-prefix id (get-identifiers typ))
   (longest-match matches)
@@ -440,7 +442,7 @@
   |=  [sut=type gen=hoon]
   ^-  (unit (list (option type)))
   %+  bind  (find-type-mule sut gen)
-  |=  [id=term typ=type]
+  |=  [id=term typ=type spt=spot]
   (search-prefix id (get-identifiers typ))
 ::
 ++  exact-list-hoon
@@ -486,6 +488,10 @@
     *hoon
   ~?  >  debug  %parsed-good-docs
   hoon:`pile:clay`p.res
+++  tape-to-pile
+  |=  [pax=path code=tape]
+  ^-  pile:clay
+  (parse-pile:lsr pax code)
 ::
 :: Generators
 ++  tab-generators

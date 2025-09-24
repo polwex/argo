@@ -24,6 +24,7 @@
     =/  method=cord
       %-  method
       (trip (need (get-json-string:util p.jon 'method')))
+    ~&  reqmethod=method
     =/  id=cord
       (need (get-json-string:util p.jon 'id'))
     =/  params=json
@@ -33,6 +34,7 @@
       ?+  method  [%unknown jon]
         %text-document--hover       (text-document--hover params id)
         %text-document--completion  (text-document--completion params id)
+        %text-document--definition  (text-document--definition params id)
       ==
       ::
       ++  text-document--hover
@@ -56,6 +58,16 @@
           'textDocument'^text-document-id
           ~
         ==
+      ++  text-document--definition
+        |=  [params=json id=cord]
+        ~&  def=params
+        :+  %text-document--definition  id
+        %.  params
+        %:  ot
+          position+position
+          'textDocument'^text-document-id
+          ~
+        ==
       --
   ::
   ++  notification
@@ -64,6 +76,7 @@
     =/  method=cord
       %-  method
       (trip (need (get-json-string:util p.jon 'method')))
+    ~&  notifmethod=method
     =/  params=json
       (~(got by p.jon) 'params')
     ^-  all:notification:lsp
@@ -197,6 +210,18 @@
         character+ni
         ~
     ==
+  ::
+  :: ++  completion-context  :: optional
+  ::   %:  ot
+  ::       ['triggerKind' trigger-kind]
+  ::       ['triggerCharacter' trigger-character]  ::  optional
+  ::       ~
+  ::   ==
+  :: ++  trigger-kind  |=  [%n p=@t]
+  :: ?:  .=(1 p)  %invoked
+  :: ?:  .=(2 p)  %trigger-character
+  :: ?:  .=(3 p)  %trigger-for-incomplete-completions
+  :: !!
   --
 ::
 ++  enjs
@@ -247,6 +272,7 @@
       ?-  -.res
         %text-document--hover       (text-document--hover res)
         %text-document--completion  (text-document--completion res)
+        %text-document--definition  (text-document--definition res)
       ==
       ::
       ++  wrap-in-id
@@ -268,6 +294,11 @@
         |=  com=text-document--completion:response:lsp
         %+  wrap-in-id   id.com
         [%a (turn completion.com completion-item)]
+
+      ++  text-document--definition
+        |=  com=text-document--definition:response:lsp
+        %+  wrap-in-id   id.com
+        (location location.com)
       --
   ++  unparse-method
     |=  =cord
@@ -326,6 +357,28 @@
       ~
     ==
   ::
+  ++  location  |=  =location:lsp  %-  json
+    ?-  -.location
+      %location  [%a (turn p.location loc)]
+      %link      [%a (turn p.location loc-link)]
+      %empty     ~
+    ==
+  ++  loc  |=  [uri=@t r=range:lsp]  ^-  json
+  %:  pairs
+    uri+s+uri
+    range+(range r)
+    ~
+    ==
+  ++  loc-link
+    |=  [target-uri=@t target-range=range:lsp target-selection-range=range:lsp origin-selection-range=(unit range:lsp)]  ^-  json
+    =/  pares  :~
+      ['targetUri' %s target-uri]
+      ['targetRange' (range target-range)]
+      ['targetSelectionRange' (range target-selection-range)]
+      ==
+    =/  prs  ?~  origin-selection-range  pares  [['originSelectionRange' (range u.origin-selection-range)] pares]
+    (pairs prs)
+  :: 
   ++  diagnostic
     |=  diag=diagnostic:lsp
     ^-  json

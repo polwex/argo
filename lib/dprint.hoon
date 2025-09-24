@@ -1,5 +1,5 @@
 /-  *sole
-/+  easy-print=language-server-easy-print
+/+  easy-print=language-server-easy-print, deep=language-server-deep
 ::    a library for printing doccords
 =/  debug  |
 =>
@@ -71,11 +71,13 @@
 ::
 ++  find-item-in-type
   |=  [topics=(list term) sut=type]
+  :: NOTE topics are the name of the actual type we do space+k with
   ?~  topics  !!
   =/  top=(lest term)  topics
   ~(find-item hunt [top sut])
 ::
 ::  +hunt: door used for refining the type while searching for doccords
+::
 ::
 ++  hunt
    =|  alias=$~(| ?)
@@ -579,6 +581,7 @@
 ++  print-item
   |=  =item
   ~?  >>  debug  %print-item
+  ~&  >>>  printing=item
   ^-  (list sole-effect)
   ?-  item
     [%view *]     (print-overview item *(pair styl styl))
@@ -790,5 +793,31 @@
   %=  $
     in   t.in
     out  (snoc out [%klr eff])
+  ==
+::
+::
+:: 
+++  find-spot-in-item  |=  [i=(unit item) nom=term]  ^-  (unit spot)
+  ?~  i  ~
+  ?-  -.u.i
+    %view  ~
+    %core
+      ~&  core=name.u.i
+      (hoon-spot:deep (arm-hoon nom sut.u.i))
+    %arm
+      ~&  arm=name.u.i
+    (hoon-spot:deep gen.u.i)
+    %face
+      ~&  face=name.u.i
+    $(i children.u.i)
+    %chapter
+      ~&  chapta=name.u.i
+    =/  hons  ~(tap by q.tom.u.i)
+              =|  res=(unit spot)
+              |-  ?~  hons  res
+                ~&  tome=hons
+                =/  spt  (hoon-spot:deep +.i.hons)
+                $(hons t.hons, res spt)
+  
   ==
 --
